@@ -3,20 +3,14 @@
 #include <string.h>
 #include <libpq-fe.h> 
 
-// Definisco i parametri di connessione come da lab6.pdf
+// Definire i parametri di connessione
 #define PG_HOST "localhost" 
 #define PG_USER "postgres"  
-#define PG_DB "ProgettoNBA" 
+#define PG_DB "progetto_nba" 
 #define PG_PASS "admin"     
 #define PG_PORT 5432
 
-// Funzione di supporto per uscire in caso di errore
-void do_exit(PGconn *conn) {
-    PQfinish(conn);
-    exit(1);
-}
-
-// Funzione generica per stampare i risultati formattati
+// Funzione per stampare i risultati delle query
 void stampa_risultato(PGresult *res) {
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
         fprintf(stderr, "Nessun dato restituito o errore nella query.\n");
@@ -28,56 +22,54 @@ void stampa_risultato(PGresult *res) {
     
     printf("\n");
     for (int i = 0; i < numAttributi; i++) {
-        fprintf(stdout, "%-25s", PQfname(res, i));
+        printf("%s\t\t", PQfname(res, i));
     }
-    fprintf(stdout, "\n");
+    printf("\n");
     
     for (int i = 0; i < numAttributi; i++) {
-        fprintf(stdout, "-------------------------");
+        printf("-------------------------");
     }
-    fprintf(stdout, "\n");
+    printf("\n");
     
     for (int i = 0; i < numTuple; i++) {
         for (int j = 0; j < numAttributi; j++) {
-            fprintf(stdout, "%-25s", PQgetvalue(res, i, j));
+            printf("%s\t\t", PQgetvalue(res, i, j));
         }
-        fprintf(stdout, "\n");
+        printf("\n");
     }
     printf("\n(%d righe restituite)\n", numTuple);
 }
 
 int main() {
-    // 1. Creo la stringa di connessione tramite sprintf
     char conninfo[250];
     sprintf(conninfo, "user=%s password=%s dbname=%s host=%s port=%d ",
             PG_USER, PG_PASS, PG_DB, PG_HOST, PG_PORT);
 
-    // 2. Eseguo la connessione al database
+    // Connessione al DB
     PGconn *conn;
     conn = PQconnectdb(conninfo);
 
-    // 3. Verifico lo stato di connessione
+    // Verificare la connessione
     if (PQstatus(conn) != CONNECTION_OK) {
         printf("Errore di connessione: %s\n", PQerrorMessage(conn));
         PQfinish(conn);
         exit(1);
     }
 
-    printf("Connessione al database stabilita con successo!\n");
+    printf("Connessione avvenuta correttamente\n");
     
     int scelta = -1;
     char buffer[100];
 
-    // 4. Inizio del ciclo per il menu interattivo
     while (1) {
-        printf("\n================ MENU PROGETTO BASI DI DATI ================\n");
-        printf("1. I trascinatori della lega (PPG > 20, Min > 25)\n");
-        printf("2. Le franchigie piu' indisciplinate (> 150 falli)\n");
-        printf("3. Le arene piu' 'calde' (Media punti)\n");
-        printf("4. Efficienza per ruolo (Assist e Media punti)\n");
-        printf("5. Eroi in trasferta (Punti massimi fuori casa)\n");
+        printf("\n================ QUERY ESEGUIBILI ================\n");
+        printf("1. Giocatori con almeno 20 punti di media e 25 minuti giocati di media\n");
+        printf("2. Le franchigie con piu' di 150 falli totali\n");
+        printf("3. Le arene dove vengono segnati piu' punti\n");
+        printf("4. Numero di assist e media punti per ogni ruolo\n");
+        printf("5. Giocatori con piu' punti totali nelle partite fuori casa\n");
         printf("0. Esci\n");
-        printf("============================================================\n");
+        printf("====================================================\n");
         printf("Seleziona una query da eseguire: ");
 
         if (scanf("%d", &scelta) != 1) {
@@ -92,7 +84,7 @@ int main() {
 
         PGresult *res = NULL;
 
-        // 5. Esecuzione delle query del progetto
+        // Esecuzione delle query
         switch (scelta) {
             case 1:
                 printf("\n--- ESECUZIONE QUERY 1 ---\n");
@@ -107,7 +99,7 @@ int main() {
             case 2:
                 printf("\n--- ESECUZIONE QUERY 2 ---\n");
                 res = PQexec(conn,
-                    "SELECT S.nome_squadra, SUM(P.falli) AS Falli_Totali "
+                    "SELECT S.nome_squadra, SUM(P.falli)"
                     "FROM Squadra S JOIN Giocatore G ON S.nome_squadra=G.nome_squadra "
                     "JOIN Prestazione P ON G.ID=P.id_giocatore "
                     "GROUP BY S.nome_squadra "
@@ -120,14 +112,14 @@ int main() {
                     "SELECT A.citta, A.nomearena, SUM(Pr.pt_segnati)/COUNT(DISTINCT Pa.idpartita) AS media_punti_partita "
                     "FROM ARENA A JOIN PARTITA Pa ON A.nomearena = Pa.nome_arena "
                     "JOIN PRESTAZIONE Pr ON Pa.idpartita = Pr.id_partita "
-                    "GROUP BY A.citta, A.nomearena "
+                    "GROUP BY A.nomearena "
                     "ORDER BY media_punti_partita DESC;"
                 );
                 break;
             case 4:
                 printf("\n--- ESECUZIONE QUERY 4 ---\n");
                 res = PQexec(conn,
-                    "SELECT G.ruolo, SUM(P.assist) AS assist_totali, AVG(P.pt_segnati) AS media_punti_realizzati "
+                    "SELECT SUM(P.assist) AS assist_totali, AVG(P.pt_segnati) AS media_punti_realizzati, G.ruolo"
                     "FROM Giocatore G JOIN Prestazione P ON G.id=P.id_giocatore "
                     "GROUP BY G.ruolo;"
                 );
@@ -142,16 +134,15 @@ int main() {
                     "WHERE G.Nome_Squadra = Pa.SqOspite "
                     "GROUP BY T.nome, T.cognome "
                     "ORDER BY punti_trasferta DESC "
-                    "LIMIT 1;"
                 );
                 break;
             default:
-                printf("\nScelta non valida. Riprova.\n");
+                printf("\nScelta non valida.\n");
                 continue;
         }
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            fprintf(stderr, "Errore durante l'esecuzione della query: %s\n", PQerrorMessage(conn));
+            printf("Errore durante l'esecuzione della query: %s\n", PQerrorMessage(conn));
         } else {
             stampa_risultato(res);
         }
